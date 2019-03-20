@@ -2,7 +2,7 @@ __author__ = 'rastko'
 
 import bs4
 import json
-from bson import json_util
+#from bson import json_util
 
 class MovieBase(object):
 
@@ -44,4 +44,5 @@ class MovieBase(object):
 
     def to_json(self):
         """Returns a JSON string of the Data member"""
-        return json.dumps(self.data, indent=4, sort_keys=True, default=json_util.default)
+        #return json.dumps(self.data, indent=4, sort_keys=True, default=json_util.default)
+        return json.dumps(self.data, indent=4, sort_keys=True)

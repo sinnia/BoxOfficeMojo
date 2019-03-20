@@ -23,7 +23,7 @@ def na_or_empty(func, *args):
         else:
             data[key] = None
     except:
-        print "Error cleaning: ", key
+        print("Error cleaning: "+ key)
         raise
 
 
@@ -36,8 +36,8 @@ def catch_connection_error(func, *args):
             return func(*args)
         except requests.exceptions.ConnectionError as e:
             has_error = True
-            print e.message
-            print "Too many HTTP requests. wait 10 sec."
+            print(e.message)
+            print("Too many HTTP requests. wait 10 sec.")
             time.sleep(10)
         except:
             raise
@@ -102,7 +102,7 @@ def standardize_keys(obj):
             standardize_keys(element)
     elif isinstance(obj, dict):
         temp = []
-        for key, val in obj.iteritems():
+        for key, val in obj.items():
             standardize_keys(val)
             temp.append(key)
         for key in temp:
@@ -114,6 +114,6 @@ def standardize_keys(obj):
 def get_soup(url):
     r = requests.get(url)
     if r.status_code == 200:
-        return bs4.BeautifulSoup(r.content)
+        return bs4.BeautifulSoup(r.content, features="html.parser")
     else:
         return None

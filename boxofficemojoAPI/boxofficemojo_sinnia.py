@@ -7,7 +7,7 @@ import movie
 import utils
 
 
-class BoxOfficeMojo(object):
+class BoxOfficeMojoSinnia(object):
     """API client object for interacting with BoxOfficeMojo website"""
 
     BOMURL = "http://www.boxofficemojo.com/movies"
@@ -16,8 +16,9 @@ class BoxOfficeMojo(object):
         self.letters = ['NUM']
         self.movie_urls = {}
         self.total_movies = 0
-        for i in range(65, 91):
-            self.letters.append(chr(i))
+        #for i in range(65, 91):
+        self.letters.append(chr(84)) # T
+        self.letters.append(chr(72)) # H
 
     def find_number_of_pages(self, soup):
         """Returns the number of sub-pages a certain letter will have"""
@@ -61,8 +62,8 @@ class BoxOfficeMojo(object):
             url = self.BOMURL + "/alphabetical.htm?letter=" + letter
             r = requests.get(url)
             if r.status_code != 200:
-                print("HTTP Status code returned:"+ r.status_code)
-            soup = bs4.BeautifulSoup(r.content)
+                print("HTTP Status code returned:"+str(r.status_code))
+            soup = bs4.BeautifulSoup(r.content, features="html.parser")
             self.clean_html(soup)
             num_pages = self.find_number_of_pages(soup)
             self.find_urls_in_html(soup)
@@ -71,49 +72,31 @@ class BoxOfficeMojo(object):
                 r = requests.get(new_url)
                 if r.status_code != 200:
                     print("HTTP Status code returned:"+r.status_code)
-                soup = bs4.BeautifulSoup(r.content)
+                soup = bs4.BeautifulSoup(r.content, features="html.parser")
                 self.clean_html(soup)
                 self.find_urls_in_html(soup)
 
     @utils.catch_connection_error
-    def get_movie_summary(self, url_or_id):
+    def get_gross_mx(self, url_or_id):
         if 'http' in url_or_id.lower():
+            print("searching movie url: " + url_or_id)
             soup = utils.get_soup(url_or_id)
             if soup is not None:
-                return movie.Movie(soup)
+                return movie.Gross(soup)
             else:
                 print("Not able to parse url: " + url_or_id)
                 pass
         elif url_or_id in self.movie_urls.keys():
-            url = self.BOMURL + "/?page=main&id=" + url_or_id + ".htm"
+            print("searching movie key: " + url_or_id)
+            url = self.BOMURL + "/?page=intl&country=MX&id=" + url_or_id +".htm"
             soup = utils.get_soup(url)
             if soup is not None:
-                return movie.Movie(soup)
+                return movie.Gross(soup)
             else:
                 print("Not able to parse url: " + url)
                 pass
         else:
-            print("Invalid movie name or URL "+url_or_id)
-
-    @utils.catch_connection_error
-    def get_weekly_summary(self, url_or_id):
-        if 'http' in url_or_id.lower():
-            soup = utils.get_soup(url_or_id)
-            if soup is not None:
-                return movie.Weekly(soup)
-            else:
-                print("Not able to parse url: " + url_or_id)
-                pass
-        elif url_or_id in self.movie_urls.keys():
-            url = self.BOMURL + "/?page=weekly&id=" + url_or_id + ".htm"
-            soup = utils.get_soup(url)
-            if soup is not None:
-                return movie.Weekly(soup)
-            else:
-                print("Not able to parse url: " + url)
-                pass
-        else:
-            print("Invalid movie name or URL ", url_or_id)
+            print ("Invalid movie name or URL "+url_or_id)
 
     def get_all_movies(self):
         for key, val in self.movie_urls.iteritems():

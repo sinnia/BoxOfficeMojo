@@ -3,9 +3,8 @@ __author__ = 'rastko'
 import bs4
 import re
 import json
-from bson import json_util
 
-from . import utils
+import utils
 from base import MovieBase
 
 
@@ -75,7 +74,7 @@ class Movie(MovieBase):
                 else:
                     pass
         except:
-            print "Error parsing movie: ", title
+            print("Error parsing movie: "+ title)
             raise
 
     def clean_data(self):
@@ -125,7 +124,7 @@ class Weekly(MovieBase):
                 for tr in rows:
                     results_week = {}
                     cols = tr.findAll("td")
-                    results_week["Week"] = re.sub(ur'(\u2013|\u0096)[\s\w\s]+', '', cols[0].renderContents().decode("utf-8")) + ", " + years[year]
+                    results_week["Week"] = ''#re.sub(ur'(\u2013|\u0096)[\s\w\s]+', '', cols[0].renderContents().decode("utf-8")) + ", " + years[year]
                     results_week["Rank"] = cols[1].renderContents()
                     results_week["Gross"] = cols[2].renderContents()
                     results_week["Week Over Week Change"] = cols[3].renderContents()
@@ -139,7 +138,7 @@ class Weekly(MovieBase):
 
             self.data["Weekly"] = results_collection
         except:
-            print "Error parsing movie: ", title
+            print("Error parsing movie: "+title)
             raise
 
     def clean_data(self):
@@ -161,3 +160,32 @@ class Weekly(MovieBase):
                 self.data.pop(key)
                 break
         utils.standardize_keys(self.data)
+
+
+class Gross(MovieBase):
+    def __init__(self, html_soup):
+        """Gross class which parses html BeautifulSoup object and extracts $$ information about the movie"""
+        MovieBase.__init__(self, html_soup)
+
+    def extract_data(self):
+        """Extract all the relevant gross information from the html file"""
+        try:
+            title = self.soup.title.contents[0].encode('utf8').decode('UTF-8')
+            self.data["Title"] = title.replace(" - International Box Office Results - Box Office Mojo", "")
+            
+            pattern = re.compile(r'Show Full Index')
+            table = self.soup.find(text=pattern).__dict__['next_sibling']#.find('table')
+            row = table.findAll('tr')[3]
+            col = row.findAll('td')[2] 
+            print('val: ' + str(col))
+            gross_to_date = col.renderContents().decode('UTF-8')
+            self.data["Gross To Date"] = gross_to_date
+        except:
+            print("Error parsing movie ")
+            raise
+
+    def clean_data(self):
+        """Formats all the extracted data into the appropriate types"""
+        utils.convert_financial_field(self.data, "Gross To Date")
+        utils.standardize_keys(self.data)
+
