@@ -5,6 +5,9 @@ import re
 import requests
 import movie
 import utils
+import csv
+import time
+import datetime
 
 
 class BoxOfficeMojo(object):
@@ -13,11 +16,14 @@ class BoxOfficeMojo(object):
     BOMURL = "http://www.boxofficemojo.com/movies"
 
     def __init__(self):
-        self.letters = ['NUM']
+        #self.letters = ['NUM'] # Movies that start with numbers and other chars
+        self.letters = [] # Movies that start with numbers and other chars
         self.movie_urls = {}
+        self.movie_info = {}
         self.total_movies = 0
-        for i in range(65, 91):
-            self.letters.append(chr(i))
+        for i in range(70, 91):
+          self.letters.append(chr(i))
+        #self.letters.append(chr(72)) # H
 
     def find_number_of_pages(self, soup):
         """Returns the number of sub-pages a certain letter will have"""
@@ -36,88 +42,99 @@ class BoxOfficeMojo(object):
             for match in soup.findAll(tag):
                 match.replaceWithChildren()
 
-    def find_urls_in_html(self, soup):
-        """Adds all the specific movie urls to the movie_urls dictionary"""
-        urls = soup.findAll(href=re.compile("id="))
-        # First URL is an ad for a movie so get rid of it
-        del(urls[0])
-
+    def find_info(self, soup):
+      """Adds all the specific movie urls to the movie_urls dictionary"""
+      urls = soup.findAll(href=re.compile("id="))
+      # First URL is an ad for a movie so get rid of it
+      del(urls[0])
+      
+      with open('boxofficemojo.csv', 'a') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
         self.total_movies += len(urls)
         for url in urls:
-            movie_name = url.renderContents()
+          try:
+            row = url.parent.parent
+            # Parse year from last column to disambiguate repeated names
+            date_col = row.findAll("td")[6]
+            date_url = date_col.find(href=re.compile("date="))
+            date_tbd_url = date_col.find(href=re.compile("yr="))
+            if date_url != None:       # Link to date
+                date = date_url.renderContents()
+            elif date_tbd_url != None: # Link to year in the future
+                date = str(date_tbd_url).split("=")[4]
+            else:                      # No link
+                date = date_col.renderContents()
+            year_pattern = re.compile("[0-9]{4}")
+            year = year_pattern.search(date).group() if year_pattern.search(date) != None else 0
+            # Append year to the movie name
+            movie_name = url.renderContents().replace('"','') # + ' (' + str(year) + ')'
             suffix = 1
             while movie_name in self.movie_urls.keys():
-                movie_name = url.renderContents() + '(' + str(suffix) + ')'
+                movie_name = url.renderContents() + ' (' + str(suffix) + ')'
                 suffix += 1
-            #save only the movie ids
-            a = re.findall(r'id=((\w|[-(),\':\s.])+).htm', url["href"])
-            if len(a) == 1:
-                self.movie_urls[a[0][0]] = movie_name
+                print("suffix: " + str(suffix))
+            # Save movie id, name, year, gross total, gross MX
+            ids = re.findall(r'id=((\w|[-(),\':\s.])+).htm', url["href"])
+            if len(ids) == 1:
+                id = ids[0][0]
+                self.movie_urls[id] = movie_name
+                gross_usa = row.findAll("td")[2].renderContents().replace('*','').replace('$','').replace(',','')
+                gross_usa = 0 if gross_usa == "n/a" else float(gross_usa)
+                gross_foreign = self.get_gross_foreign(id)
+                gross_foreign_all = gross_foreign[0]
+                gross_foreign_mx = gross_foreign[1]
+                gross_total = gross_usa + gross_foreign_all
+                self.movie_info[movie_name] = (id, movie_name,
+                                               year, gross_total, gross_foreign_mx)
+                print("saving info: " + movie_name+" -> "+str(self.movie_info[movie_name]))                
+                writer.writerow([movie_name, year, gross_total, gross_foreign_mx, id])
+          except:
+            print("Error parsing movie: " + str(url.renderContents()))
+            raise
 
-    def crawl_for_urls(self):
+    def load_movies(self):
         """Gets all the movie urls and puts them in a dictionary"""
         for letter in self.letters:
-            print('Processing letter: ' + letter)
+            time.sleep(5)
+            print(str(datetime.datetime.now()) + ' Crawling for URLs starting with: ' + letter)
             url = self.BOMURL + "/alphabetical.htm?letter=" + letter
             r = requests.get(url)
             if r.status_code != 200:
-                print("HTTP Status code returned:"+ r.status_code)
-            soup = bs4.BeautifulSoup(r.content)
+                print("HTTP Status code returned:"+str(r.status_code) + " for url: " + url)
+                continue
+            soup = bs4.BeautifulSoup(r.content, features="html.parser")
             self.clean_html(soup)
             num_pages = self.find_number_of_pages(soup)
-            self.find_urls_in_html(soup)
+            self.find_info(soup)
             for num in range(2, num_pages+1):
                 new_url = url + "&page=" + str(num)
                 r = requests.get(new_url)
                 if r.status_code != 200:
-                    print("HTTP Status code returned:"+r.status_code)
-                soup = bs4.BeautifulSoup(r.content)
+                    print("HTTP Status code returned:"+str(r.status_code))
+                soup = bs4.BeautifulSoup(r.content, features="html.parser")
                 self.clean_html(soup)
-                self.find_urls_in_html(soup)
+                self.find_info(soup)
+        print(str(datetime.datetime.now()) + ' Finished crawling')
+        vals = self.movie_urls.values()
+        print([x for i, x in enumerate(vals) if vals.count(x) > 1])
 
     @utils.catch_connection_error
-    def get_movie_summary(self, url_or_id):
-        if 'http' in url_or_id.lower():
-            soup = utils.get_soup(url_or_id)
-            if soup is not None:
-                return movie.Movie(soup)
+    def get_gross_foreign(self, url_or_id):
+        url = self.BOMURL + "/?page=intl&country=MX&id=" + url_or_id +".htm"
+        print("get_gross_foreign url: " + str(url))
+        soup = utils.get_soup(url)
+        pattern = re.compile(r'Mexico')
+        if soup is not None:
+            if soup.find(text=pattern):
+                gross_obj = movie.Gross(soup).data
+                data = (float(gross_obj['Gross To Date Foreign']),
+                  float(gross_obj['Gross To Date Country']))
+                return data
             else:
-                print("Not able to parse url: " + url_or_id)
-                pass
-        elif url_or_id in self.movie_urls.keys():
-            url = self.BOMURL + "/?page=main&id=" + url_or_id + ".htm"
-            soup = utils.get_soup(url)
-            if soup is not None:
-                return movie.Movie(soup)
-            else:
-                print("Not able to parse url: " + url)
-                pass
+                return (0, 0)
         else:
-            print("Invalid movie name or URL "+url_or_id)
+            return (0, 0)
+            pass
 
-    @utils.catch_connection_error
-    def get_weekly_summary(self, url_or_id):
-        if 'http' in url_or_id.lower():
-            soup = utils.get_soup(url_or_id)
-            if soup is not None:
-                return movie.Weekly(soup)
-            else:
-                print("Not able to parse url: " + url_or_id)
-                pass
-        elif url_or_id in self.movie_urls.keys():
-            url = self.BOMURL + "/?page=weekly&id=" + url_or_id + ".htm"
-            soup = utils.get_soup(url)
-            if soup is not None:
-                return movie.Weekly(soup)
-            else:
-                print("Not able to parse url: " + url)
-                pass
-        else:
-            print("Invalid movie name or URL ", url_or_id)
-
-    def get_all_movies(self):
-        for key, val in self.movie_urls.iteritems():
-            movie = self.get_movie_details(key)
-            movie.clean_data()
-            print(movie.to_json())
 

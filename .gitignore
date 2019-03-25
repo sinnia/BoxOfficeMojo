@@ -1,3 +1,4 @@
 test
 Analysis
 .idea
+*.pyc

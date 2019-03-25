@@ -174,16 +174,41 @@ class Gross(MovieBase):
             self.data["Title"] = title.replace(" - International Box Office Results - Box Office Mojo", "")
             
             pattern = re.compile(r'Show Full Index')
-            table = self.soup.find(text=pattern).__dict__['next_sibling']#.find('table')
-            row = table.findAll('tr')[3]
-            col = row.findAll('td')[2] 
-            print('val: ' + str(col))
-            gross_to_date = col.renderContents().decode('UTF-8')
-            self.data["Gross To Date"] = gross_to_date
+
+            if (self.soup.find(text=pattern) != None):
+                table = self.soup.find(text=pattern).__dict__['next_sibling']
+                rows = table.findAll('tr')
+
+                row_foreign = rows[1]
+                cols_foreign = row_foreign.findAll('td')
+                gross_to_date_foreign = self.extract_data_from_col(cols_foreign)
+                print("foreign: " + str(gross_to_date_foreign))
+                self.data["Gross To Date Foreign"] = gross_to_date_foreign
+
+                row_country = rows[3]
+                cols_country = row_country.findAll('td')
+                gross_to_date_country = self.extract_data_from_col(cols_country)
+                print("country: " + str(gross_to_date_country))
+                self.data["Gross To Date Country"] = gross_to_date_country
+            else:
+                self.data["Gross To Date Foreign"] = 0
+                self.data["Gross To Date Country"] = 0
         except:
             print("Error parsing movie ")
             raise
 
+    def extract_data_from_col(self, cols):
+        index = 0
+        if (len(cols) >= 3):
+            index = 2
+        elif (len(cols) == 2):
+            index = 1
+        col = cols[index] 
+        val=col.renderContents().decode('UTF-8').replace('$','').replace(',','')
+        val = 0 if val == "n/a" else float(val)
+        return val
+
+        
     def clean_data(self):
         """Formats all the extracted data into the appropriate types"""
         utils.convert_financial_field(self.data, "Gross To Date")
