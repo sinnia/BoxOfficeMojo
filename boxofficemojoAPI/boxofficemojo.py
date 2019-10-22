@@ -16,14 +16,12 @@ class BoxOfficeMojo(object):
     BOMURL = "http://www.boxofficemojo.com/movies"
 
     def __init__(self):
-        #self.letters = ['NUM'] # Movies that start with numbers and other chars
-        self.letters = [] # Movies that start with numbers and other chars
         self.movie_urls = {}
         self.movie_info = {}
         self.total_movies = 0
-        for i in range(70, 91):
+        self.letters = ['NUM'] # Movies that start with numbers and other chars
+        for i in range(65, 91):
           self.letters.append(chr(i))
-        #self.letters.append(chr(72)) # H
 
     def find_number_of_pages(self, soup):
         """Returns the number of sub-pages a certain letter will have"""
@@ -65,7 +63,7 @@ class BoxOfficeMojo(object):
                 date = str(date_tbd_url).split("=")[4]
             else:                      # No link
                 date = date_col.renderContents()
-            year_pattern = re.compile("[0-9]{4}")
+            year_pattern = re.compile('[0-9]{4}')
             year = year_pattern.search(date).group() if year_pattern.search(date) != None else 0
             # Append year to the movie name
             movie_name = url.renderContents().replace('"','') # + ' (' + str(year) + ')'
@@ -79,16 +77,18 @@ class BoxOfficeMojo(object):
             if len(ids) == 1:
                 id = ids[0][0]
                 self.movie_urls[id] = movie_name
+                genre = self.get_genre(id)
                 gross_usa = row.findAll("td")[2].renderContents().replace('*','').replace('$','').replace(',','')
                 gross_usa = 0 if gross_usa == "n/a" else float(gross_usa)
                 gross_foreign = self.get_gross_foreign(id)
                 gross_foreign_all = gross_foreign[0]
                 gross_foreign_mx = gross_foreign[1]
                 gross_total = gross_usa + gross_foreign_all
-                self.movie_info[movie_name] = (id, movie_name,
-                                               year, gross_total, gross_foreign_mx)
+                self.movie_info[movie_name] = (id, movie_name, year, genre,
+                                               gross_total, gross_foreign_mx,
+                                               gross_usa)
                 print("saving info: " + movie_name+" -> "+str(self.movie_info[movie_name]))                
-                writer.writerow([movie_name, year, gross_total, gross_foreign_mx, id])
+                writer.writerow([movie_name, year, genre, gross_total, gross_foreign_mx, gross_usa, id])
           except:
             print("Error parsing movie: " + str(url.renderContents()))
             raise
@@ -135,6 +135,22 @@ class BoxOfficeMojo(object):
                 return (0, 0)
         else:
             return (0, 0)
+            pass
+
+    @utils.catch_connection_error
+    def get_genre(self, url_or_id):
+        url = self.BOMURL + "/?id=" + url_or_id +".htm"
+        print("get_genre url: " + str(url))
+        soup = utils.get_soup(url)
+        pattern = re.compile(r'Genre')
+        if soup is not None:
+            if soup.find(text=pattern):
+                movie_obj = movie.Movie(soup).data
+                return movie_obj['Genre']
+            else:
+                return ""
+        else:
+            return ""
             pass
 
 
