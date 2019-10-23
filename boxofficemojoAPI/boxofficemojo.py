@@ -20,7 +20,7 @@ class BoxOfficeMojo(object):
         self.movie_info = {}
         self.total_movies = 0
         self.letters = ['NUM'] # Movies that start with numbers and other chars
-        for i in range(65, 91):
+        for i in range(65, 91): 
           self.letters.append(chr(i))
 
     def find_number_of_pages(self, soup):
@@ -142,7 +142,7 @@ class BoxOfficeMojo(object):
         url = self.BOMURL + "/?id=" + url_or_id +".htm"
         print("get_genre url: " + str(url))
         soup = utils.get_soup(url)
-        pattern = re.compile(r'Genre')
+        pattern = re.compile(r'Genre:')
         if soup is not None:
             if soup.find(text=pattern):
                 movie_obj = movie.Movie(soup).data
